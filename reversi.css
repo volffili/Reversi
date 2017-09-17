@@ -1,0 +1,12 @@
+/* checkers.css */
+/*body{
+	width:100%;
+}*/
+
+canvas {
+	border: solid 1px black;
+	margin:auto;
+	display:block;
+	box-shadow: 5px 5px 5px black;
+	position: relative;
+}
