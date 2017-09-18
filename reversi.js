@@ -7,19 +7,18 @@ var ctx,canvas;
 
 /** The state of the game */
 var state = {
-  over: false,
+	gamestate: 'pvp',
   turn: 'w',
   board: [
     [null, null, null, null,  null, null,  null, null],
     [null, null, null, null,  null, null,  null, null],
     [null, null, null, null,  null, null,  null, null],
-    [null, null, null, 'b',  'w', null,  null, null],
     [null, null, null, 'w',  'b', null,  null, null],
+    [null, null, null, 'b',  'w', null,  null, null],
     [null, null, null, null,  null, null,  null, null],
     [null, null, null, null,  null, null,  null, null],
     [null, null, null, null,  null, null,  null, null],
-	],
-  captures: {w: 0, b: 0}
+	]
 }
 
 function getMousePos(cx,cy) {
@@ -96,18 +95,67 @@ function getHighlightedSquares(x,y){
 
 function reverseCheckers(x,y){
 	enemy = state.turn == 'w' ? 'b' : 'w';
+	var flag = false;
 
 	var fields=getHighlightedSquares(x,y);
 
-	if(fields == []) return;
+	if(fields == []) return false;
 
 	fields.forEach(function(entry){
 		state.board[entry.y][entry.x] = state.turn;
-		console.log("x: "+entry.x+", y: "+entry.y);
+		flag = true;
 	});
 
-	nextTurn();
-	renderBoard();
+	return flag;
+}
+
+function countCheckers(){
+	var whcnt=0,blcnt=0;
+	var null_flag=false;
+	for(i=0;i<8;++i){
+		for(ii=0;ii<8;++ii){
+			if(!state.board[ii][i]) null_flag = true;
+			if(state.board[ii][i] == 'w'){
+				++whcnt;
+			}
+			if(state.board[ii][i] == 'b'){
+				++blcnt;
+			}
+		}
+	}
+	return {whcnt:whcnt,blcnt:blcnt,null_flag:null_flag}	
+}
+
+function checkForVictory(){
+	var tmp = countCheckers();
+
+	whcnt = tmp.whcnt;
+	blcnt = tmp.blcnt;
+	null_flag = tmp.null_flag;
+
+	if(!null_flag && whcnt == blcnt){
+		return 'draw';
+	}
+	if((!null_flag && whcnt > blcnt) || blcnt == 0){
+		return 'white won';
+	}
+	if((!null_flag && whcnt < blcnt) || whcnt == 0){
+		return 'black won';
+	}
+
+}
+
+function checkIfMovePossible(){
+	var array;
+	for(xx=0;xx<8;++xx){
+		for(yy=0;yy<8;++yy){
+			array = getHighlightedSquares(xx,yy);
+			if(array.length > 0){
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 /** @function nextTurn()
@@ -115,8 +163,12 @@ function reverseCheckers(x,y){
   * turn property of state.
   */
 function nextTurn() {
-  if(state.turn === 'b') state.turn = 'w';
-  else state.turn = 'b';
+	var check = checkForVictory();
+  if(check){
+  	state.gamestate = 'announcement';
+  	return check;
+  }
+	if(state.turn === 'b') state.turn = 'w'; else state.turn = 'b';
 }
 
 function boardPosition(x,y){
@@ -126,33 +178,75 @@ function boardPosition(x,y){
 }
 
 function handleMouseUp(event){
-  var pos_temp = getMousePos(event.clientX,event.clientY);
-  var position = boardPosition(pos_temp.x,pos_temp.y);
-  var x = position.x;
-  var y = position.y;
-  
-  if (x < 0 || y < 0 || x > 7 || y > 7) return;
-  
-  if (state.board[y][x] == null){
-  	reverseCheckers(x,y);
-  	renderBoard();		
-	}
-  
+
+	switch(state.gamestate){
+		case 'pvp':
+		  var pos_temp = getMousePos(event.clientX,event.clientY);
+		  var position = boardPosition(pos_temp.x,pos_temp.y);
+		  var x = position.x;
+		  var y = position.y;
+		  
+		  if (x < 0 || y < 0 || x > 7 || y > 7) return;
+
+		  if (state.board[y][x] == null){
+		  	if(reverseCheckers(x,y)){
+					var ret = nextTurn();
+					if(state.gamestate == 'pvp') {
+						renderBoard();		
+		  			if(!checkIfMovePossible()){
+		  				state.gamestate='announcement_turn_skipped';
+		  				renderAnnouncement("Turn skipped");
+		  			}
+		  			return;
+					}
+					if(state.gamestate == 'announcement') {
+						renderAnnouncement(ret);		
+					}
+				}
+			}
+		break;
+		case 'announcement':
+			state.turn = 'w';
+			state.gamestate = 'pvp';
+			state.board=[
+		    [null, null, null, null,  null, null,  null, null],
+		    [null, null, null, null,  null, null,  null, null],
+		    [null, null, null, null,  null, null,  null, null],
+		    [null, null, null, 'b',  'w', null,  null, null],
+		    [null, null, null, 'w',  'b', null,  null, null],
+		    [null, null, null, null,  null, null,  null, null],
+		    [null, null, null, null,  null, null,  null, null],
+		    [null, null, null, null,  null, null,  null, null],
+			]
+		break;
+		case 'announcement_turn_skipped':
+			nextTurn();
+			state.gamestate = 'pvp';		  			
+			if(!checkIfMovePossible()){
+				state.gamestate='announcement_turn_skipped';
+				renderAnnouncement("Turn skipped");
+			}
+		break;
+  }
 }
 
 function handleMouseMove(event){
+	switch(state.gamestate){
+		case 'pvp':
+		  var pos_temp = getMousePos(event.clientX,event.clientY);
+		  var position = boardPosition(pos_temp.x,pos_temp.y);
+		  var x = position.x;
+		  var y = position.y;
 
+		  if (x < 0 || y < 0 || x > 7 || y > 7) return;
 
-  var pos_temp = getMousePos(event.clientX,event.clientY);
-  var position = boardPosition(pos_temp.x,pos_temp.y);
-  var x = position.x;
-  var y = position.y;
+		  var highlights = getHighlightedSquares(x,y);
 
-  if (x < 0 || y < 0 || x > 7 || y > 7) return;
-
-  var highlights = getHighlightedSquares(x,y);
-
-  renderBoard(highlights);
+		  renderBoard(highlights);
+		break;
+		case 'announcement':
+		break;
+	}
 }
 
 function blendColors(c0, p) {
@@ -161,6 +255,44 @@ function blendColors(c0, p) {
     var G1=f>>8&0x00FF;
     var B1=f&0x0000FF;
     return "#"+(0x1000000+(Math.round(R1*p))*0x10000+(Math.round(G1*p))*0x100+(Math.round(B1*p))).toString(16).slice(1);
+}
+
+function renderAnnouncement(text){
+
+  var rect = canvas.getBoundingClientRect();
+  ctx.fillStyle = '#8B4513';
+  //ctx.fillRect(0,0,480,550);\
+  var w = rect.right-rect.left;
+  var h = rect.bottom-rect.top;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.font = "80px Arial";
+	ctx.textAlign="center"; 
+
+
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#000';	
+
+	if(text == 'white won'){
+  	ctx.fillStyle = '#fff';
+  	ctx.strokeStyle = '#000';	
+	}
+
+  if(text == 'black won'){
+ 		ctx.fillStyle = '#000';
+  	ctx.strokeStyle = '#fff';
+	}
+
+	if(text == 'Turn skipped'){
+  	ctx.font = "50px Arial";
+		ctx.fillText('No available moves',w/2,h/3);
+		ctx.strokeText('No available moves',w/2,h/3);
+		ctx.fillText(text,w/2,h/3*2);
+		ctx.strokeText(text,w/2,h/3*2);
+	}else{
+		ctx.fillText(text,w/2,h/2);
+		ctx.strokeText(text,w/2,h/2);
+	}	
 }
 
 function renderSquare(x,y,lighter_percentage=1,border=false){
@@ -217,12 +349,37 @@ function renderBoard(highlights){
 		}
 	}
 
+  ctx.fillStyle = '#8B4513';
+  ctx.strokeStyle = '#D2691E';
+  ctx.fillRect(0,480,480,550);
+  ctx.strokeRect(0,480,480,550);
+  
+	ctx.font = "30px Arial";
+	ctx.textAlign="center"; 
+	if(state.turn == 'w'){
+  	ctx.fillStyle = '#fff';
+		ctx.fillText("White's turn",240,525);
+	}	else{
+  	ctx.fillStyle = '#000';
+		ctx.fillText("Black's turn",240,525);
+	}
+
+	var tmp = countCheckers();
+
+	whcnt = tmp.whcnt;
+	blcnt = tmp.blcnt;
+
+	ctx.fillStyle = '#fff';
+	ctx.fillText(whcnt,80,525);
+
+	ctx.fillStyle = '#000';
+	ctx.fillText(blcnt,400,525);
 }
 
 function setup() {
 	canvas = document.createElement('canvas');
 	canvas.width = 480;
-	canvas.height = 480;
+	canvas.height = 550;
   canvas.onmouseup = handleMouseUp;
 	canvas.onmousemove = handleMouseMove;
 	document.body.appendChild(canvas);
